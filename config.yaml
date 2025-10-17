@@ -1,0 +1,58 @@
+# Fine-tuning Configuration for Autonomous Driving
+
+# Data Configuration
+data:
+  raw_data_path: "data/raw"
+  processed_data_path: "data/processed"
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  image_width: 224
+  image_height: 224
+  batch_size: 32
+  num_workers: 4
+
+# Model Configuration
+model:
+  name: "resnet34"  # Options: resnet18, resnet34, resnet50, resnet101
+  pretrained: true
+  num_outputs: 1  # For steering angle prediction
+  freeze_backbone: false  # Set to true to only train the final layers
+  freeze_layers: 0  # Number of initial layers to freeze (0 = none)
+
+# Training Configuration
+training:
+  num_epochs: 50
+  learning_rate: 0.0001
+  optimizer: "adam"  # Options: adam, sgd, adamw
+  scheduler: "reduce_on_plateau"  # Options: step, cosine, reduce_on_plateau
+  weight_decay: 0.0001
+  early_stopping_patience: 10
+  gradient_clip: 1.0
+
+# Loss Configuration
+loss:
+  type: "mse"  # Mean Squared Error for steering angle regression
+
+# Checkpoint Configuration
+checkpoint:
+  save_dir: "checkpoints"
+  save_frequency: 5  # Save every N epochs
+  save_best_only: true
+
+# Logging Configuration
+logging:
+  log_dir: "logs"
+  tensorboard: true
+  print_frequency: 10  # Print every N batches
+
+# Augmentation Configuration
+augmentation:
+  horizontal_flip: true
+  brightness: 0.2
+  contrast: 0.2
+  saturation: 0.2
+  hue: 0.1
+  rotation: 5  # degrees
+  random_crop: true
+
