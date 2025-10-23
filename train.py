@@ -112,6 +112,28 @@ class Trainer:
         self.best_val_loss = float('inf')
         self.epochs_without_improvement = 0
         self.current_epoch = 0
+        
+        # Learning rate warmup
+        self.warmup_epochs = config['training'].get('warmup_epochs', 0)
+        self.base_lr = lr
+        
+        # Mixed precision training (if GPU available)
+        self.use_amp = config['training'].get('use_amp', False) and torch.cuda.is_available()
+        if self.use_amp:
+            self.scaler = torch.cuda.amp.GradScaler()
+            print("Mixed precision training enabled")
+        else:
+            self.scaler = None
+    
+    def adjust_learning_rate_warmup(self, epoch):
+        """Adjust learning rate for warmup phase"""
+        if epoch <= self.warmup_epochs:
+            # Linear warmup
+            lr = self.base_lr * (epoch / self.warmup_epochs)
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
+            return lr
+        return None
     
     def train_epoch(self, train_loader):
         """Train for one epoch"""
@@ -119,35 +141,63 @@ class Trainer:
         total_loss = 0
         num_batches = len(train_loader)
         
+        # Apply warmup if in warmup phase
+        warmup_lr = self.adjust_learning_rate_warmup(self.current_epoch)
+        
         progress_bar = tqdm(train_loader, desc=f"Epoch {self.current_epoch}")
+        if warmup_lr:
+            progress_bar.set_description(f"Epoch {self.current_epoch} (Warmup LR: {warmup_lr:.6f})")
         
         for batch_idx, (images, targets) in enumerate(progress_bar):
             images = images.to(self.device)
             targets = targets.to(self.device)
             
-            # Forward pass
+            # Forward pass with mixed precision
             self.optimizer.zero_grad()
-            outputs = self.model(images)
-            loss = self.criterion(outputs, targets)
             
-            # Backward pass
-            loss.backward()
-            
-            # Gradient clipping
-            if self.config['training'].get('gradient_clip'):
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), 
-                    self.config['training']['gradient_clip']
-                )
-            
-            self.optimizer.step()
+            if self.use_amp:
+                with torch.cuda.amp.autocast():
+                    outputs = self.model(images)
+                    loss = self.criterion(outputs, targets)
+                
+                # Backward pass with gradient scaling
+                self.scaler.scale(loss).backward()
+                
+                # Gradient clipping
+                if self.config['training'].get('gradient_clip'):
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), 
+                        self.config['training']['gradient_clip']
+                    )
+                
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                outputs = self.model(images)
+                loss = self.criterion(outputs, targets)
+                
+                # Backward pass
+                loss.backward()
+                
+                # Gradient clipping
+                if self.config['training'].get('gradient_clip'):
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), 
+                        self.config['training']['gradient_clip']
+                    )
+                
+                self.optimizer.step()
             
             # Update metrics
             total_loss += loss.item()
             avg_loss = total_loss / (batch_idx + 1)
             
             # Update progress bar
-            progress_bar.set_postfix({'loss': f'{avg_loss:.6f}'})
+            progress_bar.set_postfix({
+                'loss': f'{avg_loss:.6f}',
+                'lr': f'{self.optimizer.param_groups[0]["lr"]:.6f}'
+            })
             
             # Log to tensorboard
             if self.writer and batch_idx % self.config['logging']['print_frequency'] == 0:
@@ -238,8 +288,8 @@ class Trainer:
                 self.writer.add_scalar('Learning_Rate', 
                                       self.optimizer.param_groups[0]['lr'], epoch)
             
-            # Update learning rate
-            if self.scheduler:
+            # Update learning rate (only after warmup)
+            if self.scheduler and epoch > self.warmup_epochs:
                 if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
                     self.scheduler.step(val_loss)
                 else:

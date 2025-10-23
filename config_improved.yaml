@@ -1,0 +1,66 @@
+# Improved Configuration for Better Performance
+# Based on analysis of previous training results
+# Key improvements: better LR, larger model, more epochs, better augmentation
+
+# Data Configuration
+data:
+  raw_data_path: "data/raw"
+  processed_data_path: "data/processed"
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  image_width: 224
+  image_height: 224
+  batch_size: 32  # Increased from 16 (if GPU available, use 64)
+  num_workers: 4  # Increased for faster data loading
+
+# Model Configuration
+model:
+  name: "resnet50"  # Upgraded from resnet18 (11M → 23M params) for better capacity
+  pretrained: true
+  num_outputs: 1
+  freeze_backbone: false
+  freeze_layers: 3  # Freeze first 3 layers to prevent catastrophic forgetting
+
+# Training Configuration
+training:
+  num_epochs: 50  # Increased from 10 for thorough training
+  learning_rate: 0.0001  # Reduced from 0.001 (10x lower for stable fine-tuning)
+  optimizer: "adamw"  # Changed from adam - better weight decay handling
+  scheduler: "cosine"  # Changed from reduce_on_plateau - smoother decay
+  weight_decay: 0.01  # Increased from 0.0001 for better regularization
+  early_stopping_patience: 15  # Increased from 5 to allow more exploration
+  gradient_clip: 1.0
+  warmup_epochs: 3  # Add warmup for stable start (needs code implementation)
+
+# Loss Configuration
+loss:
+  type: "huber"  # Changed from mse - more robust to outliers
+
+# Checkpoint Configuration
+checkpoint:
+  save_dir: "checkpoints"
+  save_frequency: 5  # Save less frequently
+  save_best_only: true
+
+# Logging Configuration
+logging:
+  log_dir: "logs"
+  tensorboard: true
+  print_frequency: 10
+
+# Augmentation Configuration - More aggressive for better generalization
+augmentation:
+  horizontal_flip: true
+  brightness: 0.3  # Increased from 0.2
+  contrast: 0.3    # Increased from 0.2
+  saturation: 0.3  # Increased from 0.2
+  hue: 0.15        # Increased from 0.1
+  rotation: 10     # Increased from 5
+  random_crop: true  # Enabled
+
+# Additional notes:
+# - If training on CPU, reduce batch_size to 16 and use resnet34 instead of resnet50
+# - If using real dataset, can increase to resnet101 for even better performance
+# - Monitor training: tensorboard --logdir logs
+

@@ -24,11 +24,13 @@ model:
 training:
   num_epochs: 50
   learning_rate: 0.0001
-  optimizer: "adam"  # Options: adam, sgd, adamw
-  scheduler: "reduce_on_plateau"  # Options: step, cosine, reduce_on_plateau
-  weight_decay: 0.0001
-  early_stopping_patience: 10
+  optimizer: "adamw"  # Options: adam, sgd, adamw (adamw recommended)
+  scheduler: "cosine"  # Options: step, cosine, reduce_on_plateau
+  weight_decay: 0.01  # Increased for better regularization
+  early_stopping_patience: 15
   gradient_clip: 1.0
+  warmup_epochs: 3  # Learning rate warmup epochs (0 = no warmup)
+  use_amp: false  # Mixed precision training (set true for GPU speedup)
 
 # Loss Configuration
 loss:
